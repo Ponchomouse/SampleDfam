@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sample Dfam</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background-color: #07090e;
+            color: #e2e8f0;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f141d; }
+        ::-webkit-scrollbar-thumb { background: #263346; border-radius: 3px; }
+
+        .led {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #1a2332;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.9);
+            transition: all 0.08s ease;
+        }
+        .led.active { background-color: #f59e0b; box-shadow: 0 0 10px #f59e0b, 0 0 16px #f59e0b; }
+        .led.step-active { background-color: #06b6d4; box-shadow: 0 0 10px #06b6d4, 0 0 16px #06b6d4; }
+        .led.recording { background-color: #ef4444; box-shadow: 0 0 10px #ef4444, 0 0 16px #ef4444; }
+
+        /* iPad Touch Optimized Range Sliders */
+        input[type=range] { 
+            -webkit-appearance: none; 
+            background: transparent; 
+            touch-action: none;
+            padding: 8px 0;
+            margin: 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 16px; cursor: pointer; background: #131a26; border-radius: 8px; border: 1px solid #283549;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 36px; width: 28px; border-radius: 6px; cursor: pointer; -webkit-appearance: none; margin-top: -10px; box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+        }
+        .start-slider::-webkit-slider-thumb { background: #06b6d4 !important; }
+        .vol-slider::-webkit-slider-thumb { background: #10b981 !important; }
+        .pitch-slider::-webkit-slider-thumb { background: #a855f7 !important; }
+        .fx-slider::-webkit-slider-thumb { background: #f59e0b !important; }
+
+        .panel-box {
+            background: linear-gradient(145deg, #111622, #0b0e16);
+            border: 1px solid #1e293b;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        /* FX Drawer Animation */
+        #fxDrawer {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #fxDrawer.closed {
+            transform: translateY(100%);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between p-2 font-sans select-none">
+
+    <!-- HEADER / ROUTING CONTROL BAR -->
+    <header class="panel-box rounded-xl p-2 mb-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
+                <i data-lucide="disc-3" class="w-5 h-5 text-amber-400"></i>
+            </div>
+            <div>
+                <h1 class="font-black text-xs md:text-sm tracking-wider text-amber-400 flex items-center gap-2 uppercase">
+                    Sample Dfam <span class="text-[9px] font-mono bg-amber-950/80 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700">iPad Ed.</span>
+                </h1>
+                <p class="text-[8px] font-mono text-slate-400">Class-Compliant Audio Sampler & MIDI Sequencer</p>
+            </div>
+        </div>
+
+        <!-- Hardware & Audio Access Trigger -->
+        <button id="initAudioBtn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-mono transition shadow-lg shadow-amber-950/50 active:scale-95">
+            <i data-lucide="plug" class="w-4 h-4"></i> INIT AUDIO / MIDI
+        </button>
+
+        <!-- Hardware Selectors -->
+        <div class="flex flex-wrap items-center gap-2 grow justify-end">
+            <!-- Latency Mode -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">Latency</label>
+                <select id="latencyModeSelect" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-amber-400 font-mono focus:border-amber-500 outline-none">
+                    <option value="interactive" selected>Ultra-Low</option>
+                    <option value="balanced">Balanced</option>
+                </select>
+            </div>
+
+            <!-- Audio Input Device -->
+            <div class="flex flex-col gap-0.5 min-w-[90px]">
+                <label class="text-[8px] uppercase font-mono text-slate-400 flex items-center gap-1"><i data-lucide="mic" class="w-3 h-3"></i> Audio In</label>
+                <select id="audioInSelect" class="bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[10px] text-slate-200 focus:border-amber-500 outline-none truncate">
+                    <option value="">Default / External Interface</option>
+                </select>
+            </div>
+
+            <!-- Audio Input Channel Select -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">In Channel</label>
+                <select id="inputChannelSelect" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-cyan-400 font-mono font-bold focus:border-amber-500 outline-none">
+                    <option value="stereo" selected>Stereo (Ch 1+2)</option>
+                    <option value="ch1">Ch 1 (Left)</option>
+                    <option value="ch2">Ch 2 (Right)</option>
+                </select>
+            </div>
+
+            <!-- In Gain -->
+            <div class="flex flex-col gap-0.5 w-[65px]">
+                <div class="flex justify-between text-[8px] uppercase font-mono text-slate-400">
+                    <span>Gain</span>
+                    <span id="inputGainVal" class="text-amber-400 font-bold">1.0x</span>
+                </div>
+                <input type="range" id="inputGainSlider" min="1" max="10" step="0.1" value="1" class="vol-slider">
+            </div>
+
+            <!-- MIDI Device -->
+            <div class="flex flex-col gap-0.5 min-w-[85px]">
+                <label class="text-[8px] uppercase font-mono text-slate-400 flex items-center gap-1"><i data-lucide="cable" class="w-3 h-3"></i> MIDI In</label>
+                <select id="midiInSelect" class="bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[10px] text-slate-200 focus:border-amber-500 outline-none truncate">
+                    <option value="">No MIDI Input</option>
+                </select>
+            </div>
+
+            <!-- MIDI CH -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">MIDI CH</label>
+                <select id="midiChannelSelect" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-amber-400 font-mono font-bold focus:border-amber-500 outline-none">
+                </select>
+            </div>
+
+            <!-- Clock Source Toggle -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">Clock Source</label>
+                <button id="clockSourceBtn" onclick="toggleClockSource()" class="bg-slate-900 border border-slate-700 text-amber-400 font-mono text-[9px] font-bold py-1 px-2 rounded hover:border-amber-500 transition">
+                    INTERNAL
+                </button>
+            </div>
+
+            <!-- Sequence Speed / Time Division -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">Seq Speed</label>
+                <select id="seqSpeedSelect" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-400 font-mono font-bold focus:border-emerald-500 outline-none">
+                    <option value="0.25">1/4x (Slow)</option>
+                    <option value="0.5">1/2x</option>
+                    <option value="1" selected>1x (16th)</option>
+                    <option value="2">2x (32nd)</option>
+                    <option value="4">4x (Fast)</option>
+                    <option value="1/8T">1/8T (Triplets)</option>
+                    <option value="1/16T">1/16T (Triplets)</option>
+                </select>
+            </div>
+
+            <!-- BPM Control -->
+            <div class="flex flex-col gap-0.5 w-[60px]" id="bpmContainer">
+                <div class="flex justify-between text-[8px] uppercase font-mono text-slate-400">
+                    <span>BPM</span>
+                    <span id="bpmVal" class="text-amber-400 font-bold">120</span>
+                </div>
+                <input type="range" id="bpmSlider" min="60" max="240" step="1" value="120" class="fx-slider">
+            </div>
+
+            <!-- Voice Mode Toggle -->
+            <div class="flex flex-col gap-0.5">
+                <label class="text-[8px] uppercase font-mono text-slate-400">Voice Mode</label>
+                <button id="voiceModeBtn" onclick="toggleVoiceMode()" class="bg-slate-900 border border-slate-700 text-cyan-400 font-mono text-[9px] font-bold py-1 px-2 rounded hover:border-cyan-500 transition">
+                    OVERLAP
+                </button>
+            </div>
+
+            <!-- FX Rack Drawer Button -->
+            <button id="openFxRackBtn" class="bg-amber-950/80 hover:bg-amber-900 border border-amber-600 text-amber-300 font-mono text-[10px] font-bold py-1 px-2.5 rounded flex items-center gap-1 transition active:scale-95 shadow-md">
+                <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> FX RACK
+            </button>
+
+            <!-- Sync Indicator -->
+            <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg">
+                <div id="midiLed" class="led" title="MIDI Activity"></div>
+                <span id="syncStatus" class="text-[9px] font-mono text-slate-400">CLK: INT</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN APP SCREEN (CENTER WAVEFORM STAGE + STEP GRID) -->
+    <main class="grow grid grid-rows-12 gap-1.5 overflow-hidden">
+        
+        <!-- TOP/CENTER STAGE: WAVEFORM SAMPLE PLAYER & ADSR ENVELOPE -->
+        <section class="row-span-4 panel-box rounded-xl p-2 flex flex-col justify-between gap-1 relative">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-1">
+                <div class="flex items-center gap-2">
+                    <span class="font-mono font-black text-xs uppercase text-slate-200 flex items-center gap-1.5">
+                        <i data-lucide="activity" class="w-4 h-4 text-amber-400"></i> Sample Waveform & Real-time Playhead
+                    </span>
+                    <span id="recordTimer" class="font-mono text-[10px] text-slate-400">00.0s / 15.0s</span>
+                </div>
+
+                <!-- RECORD / SESSION SAVE / SEQUENCER CONTROLS -->
+                <div class="flex items-center gap-1.5">
+                    <button id="recBtn" class="flex items-center gap-1 bg-red-950/60 hover:bg-red-900 border border-red-700 text-red-200 px-2.5 py-1 rounded-lg font-mono text-xs font-bold transition active:scale-95">
+                        <div id="recLed" class="led"></div>
+                        <span id="recBtnText">REC BUFFER</span>
+                    </button>
+                    <button id="resetBtn" class="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-2.5 py-1 rounded-lg font-mono text-xs font-bold transition active:scale-95">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> RESET
+                    </button>
+                    <button id="transportBtn" class="flex items-center gap-1 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600 text-emerald-300 px-3 py-1 rounded-lg font-mono text-xs font-bold transition active:scale-95">
+                        <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> PLAY SEQ
+                    </button>
+                    
+                    <!-- SESSION & AUDIO DISK CONTROLS -->
+                    <div class="flex items-center gap-1 border-l border-slate-800 pl-1.5">
+                        <button id="saveSessionBtn" class="bg-cyan-950 hover:bg-cyan-900 border border-cyan-600 text-cyan-300 font-mono text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                            <i data-lucide="save" class="w-3 h-3"></i> SAVE
+                        </button>
+                        <button id="loadSessionBtn" class="bg-cyan-950 hover:bg-cyan-900 border border-cyan-600 text-cyan-300 font-mono text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                            <i data-lucide="folder-open" class="w-3 h-3"></i> LOAD
+                        </button>
+                        <button id="exportWavBtn" class="bg-amber-950 hover:bg-amber-900 border border-amber-600 text-amber-300 font-mono text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                            <i data-lucide="download" class="w-3 h-3"></i> WAV
+                        </button>
+                        <input type="file" id="sessionFileInput" class="hidden" accept=".json">
+                    </div>
+                </div>
+            </div>
+
+            <!-- FRONT & CENTER WAVEFORM CANVAS -->
+            <div class="grow relative w-full bg-slate-950 rounded-lg border border-slate-800 overflow-hidden min-h-[80px]">
+                <canvas id="waveformCanvas" class="w-full h-full block"></canvas>
+            </div>
+
+            <!-- ADSR ENVELOPE FOOTER STRIP -->
+            <div class="flex items-center justify-between gap-2 border-t border-slate-800/80 pt-1">
+                <span class="text-[9px] font-mono text-emerald-400 font-bold uppercase flex items-center gap-1"><i data-lucide="sliders" class="w-3 h-3"></i> ADSR Volume:</span>
+                <div class="grow grid grid-cols-4 gap-2 max-w-xl">
+                    <div class="flex items-center gap-1.5"><span class="text-[8px] font-mono text-slate-400">ATTACK</span><input type="range" id="envA" min="0.001" max="2" step="0.01" value="0.01" class="vol-slider grow"><span id="envAVal" class="text-[8px] font-mono text-emerald-400 w-8">10ms</span></div>
+                    <div class="flex items-center gap-1.5"><span class="text-[8px] font-mono text-slate-400">DECAY</span><input type="range" id="envD" min="0.01" max="3" step="0.01" value="0.3" class="vol-slider grow"><span id="envDVal" class="text-[8px] font-mono text-emerald-400 w-8">300ms</span></div>
+                    <div class="flex items-center gap-1.5"><span class="text-[8px] font-mono text-slate-400">SUSTAIN</span><input type="range" id="envS" min="0" max="1" step="0.01" value="0.8" class="vol-slider grow"><span id="envSVal" class="text-[8px] font-mono text-emerald-400 w-8">80%</span></div>
+                    <div class="flex items-center gap-1.5"><span class="text-[8px] font-mono text-slate-400">RELEASE</span><input type="range" id="envR" min="0.01" max="5" step="0.01" value="0.5" class="vol-slider grow"><span id="envRVal" class="text-[8px] font-mono text-emerald-400 w-8">500ms</span></div>
+                </div>
+                <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-lg">
+                    <span class="text-[9px] font-mono text-slate-400">STEPS:</span>
+                    <span id="activeStepsDisplay" class="font-mono text-xs text-amber-400 font-bold">8</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP CARDS GRID (8 PLAYBACK SECTIONS) -->
+        <section id="stepGrid" class="row-span-8 grid grid-cols-2 md:grid-cols-4 gap-1.5 grow">
+            <!-- Rendered via JS -->
+        </section>
+
+    </main>
+
+    <!-- COLLAPSIBLE FX RACK DRAWER (MODAL OVERLAY) -->
+    <div id="fxDrawer" class="closed fixed inset-x-0 bottom-0 top-14 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 p-4 z-50 overflow-y-auto flex flex-col justify-between">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+            <span class="font-mono font-black text-sm uppercase text-amber-400 flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-5 h-5"></i> Master FX Suite (Default Bypassed at 0 Mix)
+            </span>
+            <button id="closeFxRackBtn" class="bg-slate-800 text-slate-300 px-3 py-1 rounded-lg text-xs font-mono font-bold hover:bg-slate-700">
+                CLOSE FX RACK ✕
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 grow">
+            <!-- Multi-Mode Filter -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="filter" class="w-4 h-4"></i> Filter</span>
+                    <div class="flex gap-1">
+                        <button id="filterModeLP" onclick="setFilterMode('lowpass')" class="bg-amber-500 text-slate-950 text-[9px] font-mono font-bold px-2 py-0.5 rounded">LP</button>
+                        <button id="filterModeBP" onclick="setFilterMode('bandpass')" class="bg-slate-800 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded">BP</button>
+                        <button id="filterModeHP" onclick="setFilterMode('highpass')" class="bg-slate-800 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded">HP</button>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">CUTOFF</label><input type="range" id="fxFilterCutoff" min="20" max="18000" step="10" value="18000" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">RESO</label><input type="range" id="fxFilterReso" min="0.1" max="20" step="0.1" value="1" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxFilterMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+
+            <!-- Overdrive -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="zap" class="w-4 h-4"></i> Overdrive</span>
+                    <span class="text-[9px] font-mono text-slate-500">DRIVE / TONE / MIX</span>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">DRIVE</label><input type="range" id="fxDriveAmount" min="1" max="50" step="1" value="5" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">TONE</label><input type="range" id="fxDriveTone" min="500" max="10000" step="100" value="3000" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxDriveMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+
+            <!-- Compressor -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="shrink" class="w-4 h-4"></i> Compressor</span>
+                    <span class="text-[9px] font-mono text-slate-500">THRESH / RATIO / MIX</span>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">THRESH</label><input type="range" id="fxCompThresh" min="-60" max="0" step="1" value="-24" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">RATIO</label><input type="range" id="fxCompRatio" min="1" max="20" step="0.5" value="4" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxCompMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+
+            <!-- Delay -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="clock" class="w-4 h-4"></i> Delay</span>
+                    <span class="text-[9px] font-mono text-slate-500">TIME / FB / MIX</span>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">TIME</label><input type="range" id="fxDelayTime" min="0.05" max="1" step="0.01" value="0.25" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">FB</label><input type="range" id="fxDelayFeedback" min="0" max="0.85" step="0.01" value="0.4" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxDelayMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+
+            <!-- Reverb -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="cloud" class="w-4 h-4"></i> Reverb</span>
+                    <span class="text-[9px] font-mono text-slate-500">DECAY / MIX</span>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">DECAY</label><input type="range" id="fxReverbDecay" min="0.5" max="8" step="0.1" value="2" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxReverbMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+
+            <!-- Chorus -->
+            <div class="panel-box rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span class="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1"><i data-lucide="layers" class="w-4 h-4"></i> Chorus</span>
+                    <span class="text-[9px] font-mono text-slate-500">RATE / DEPTH / MIX</span>
+                </div>
+                <div class="flex flex-col gap-2 my-2">
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">RATE</label><input type="range" id="fxChorusRate" min="0.1" max="5" step="0.1" value="1.5" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">DEPTH</label><input type="range" id="fxChorusDepth" min="0.001" max="0.02" step="0.001" value="0.005" class="fx-slider"></div>
+                    <div class="flex flex-col gap-0.5"><label class="text-[9px] font-mono text-slate-400">MIX</label><input type="range" id="fxChorusMix" min="0" max="1" step="0.01" value="0" class="fx-slider"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER STATUS BAR -->
+    <footer class="mt-1 text-[9px] font-mono text-slate-500 flex justify-between items-center border-t border-slate-800/80 pt-0.5 shrink-0">
+        <span>STATUS: <span id="systemStatusText" class="text-slate-300">Tap 'INIT AUDIO / MIDI' to unlock Web MIDI Browser I/O.</span></span>
+        <span>MIDI CC MAP: START (CC 1-8) | VOL (CC 9-16) | PITCH (CC 17-24)</span>
+    </footer>
+
+    <!-- APPLICATION LOGIC -->
+    <script>
+        lucide.createIcons();
+
+        // App Configuration State
+        const DEFAULT_CONFIG = {
+            envA: 0.01, envD: 0.3, envS: 0.8, envR: 0.5,
+            lastStep: null,
+            inputGain: 1.0,
+            inputChannel: 'stereo',
+            selectedAudioInId: '',
+            selectedMidiInId: '',
+            midiChannel: 14,
+            clockSource: 'internal',
+            seqSpeed: '1',
+            bpm: 120,
+            voiceMode: 'overlap',
+            latencyMode: 'interactive',
+            steps: Array.from({ length: 8 }, (_, i) => ({
+                start: (i / 8), vol: 0.8, pitch: 0
+            })),
+            fx: {
+                filterMode: 'lowpass', filterCutoff: 18000, filterReso: 1, filterMix: 0,
+                driveAmount: 5, driveTone: 3000, driveMix: 0,
+                compThresh: -24, compRatio: 4, compMix: 0,
+                delayTime: 0.25, delayFB: 0.4, delayMix: 0,
+                reverbDecay: 2, reverbMix: 0,
+                chorusRate: 1.5, chorusDepth: 0.005, chorusMix: 0
+            }
+        };
+
+        let appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+
+        // Web Audio Context & Nodes
+        let audioCtx = null;
+        let audioBuffer = null;
+        let mediaRecorder = null;
+        let activeInputStream = null;
+        let currentSourceNode = null;
+        let recordChunks = [];
+        let recordStartTime = 0;
+        let recordInterval = null;
+        let isRecording = false;
+
+        let inputGainNode = null;
+        let channelSplitter = null;
+        let channelMerger = null;
+        let activeVoiceSources = [];
+        let activeVoicePositions = [];
+
+        // FX Graph Nodes
+        let filterNode = null, filterWetGain = null;
+        let driveWaveShaper = null, driveToneFilter = null, driveWetGain = null;
+        let compNode = null, compWetGain = null;
+        let delayNode = null, delayFBGain = null, delayWetGain = null;
+        let reverbConvolver = null, reverbWetGain = null;
+        let chorusDelayNode = null, chorusLFONode = null, chorusLFOGain = null, chorusWetGain = null;
+
+        // Sequencer & Clock State
+        let isPlaying = false;
+        let currentStep = -1;
+        let internalTimer = null;
+        let midiAccess = null;
+        let midiClockPulseCount = 0;
+        let animFrameReq = null;
+
+        // DOM Elements
+        const initAudioBtn = document.getElementById('initAudioBtn');
+        const latencyModeSelect = document.getElementById('latencyModeSelect');
+        const audioInSelect = document.getElementById('audioInSelect');
+        const inputChannelSelect = document.getElementById('inputChannelSelect');
+        const inputGainSlider = document.getElementById('inputGainSlider');
+        const inputGainVal = document.getElementById('inputGainVal');
+        const midiInSelect = document.getElementById('midiInSelect');
+        const midiChannelSelect = document.getElementById('midiChannelSelect');
+        const seqSpeedSelect = document.getElementById('seqSpeedSelect');
+        const clockSourceBtn = document.getElementById('clockSourceBtn');
+        const bpmContainer = document.getElementById('bpmContainer');
+        const bpmSlider = document.getElementById('bpmSlider');
+        const bpmVal = document.getElementById('bpmVal');
+        const voiceModeBtn = document.getElementById('voiceModeBtn');
+
+        const waveformCanvas = document.getElementById('waveformCanvas');
+        const canvasCtx = waveformCanvas.getContext('2d');
+        const recBtn = document.getElementById('recBtn');
+        const recBtnText = document.getElementById('recBtnText');
+        const recLed = document.getElementById('recLed');
+        const recordTimer = document.getElementById('recordTimer');
+        const resetBtn = document.getElementById('resetBtn');
+        const transportBtn = document.getElementById('transportBtn');
+        const saveSessionBtn = document.getElementById('saveSessionBtn');
+        const loadSessionBtn = document.getElementById('loadSessionBtn');
+        const exportWavBtn = document.getElementById('exportWavBtn');
+        const sessionFileInput = document.getElementById('sessionFileInput');
+
+        const activeStepsDisplay = document.getElementById('activeStepsDisplay');
+        const midiLed = document.getElementById('midiLed');
+        const syncStatus = document.getElementById('syncStatus');
+        const systemStatusText = document.getElementById('systemStatusText');
+        const stepGrid = document.getElementById('stepGrid');
+        const fxDrawer = document.getElementById('fxDrawer');
+        const openFxRackBtn = document.getElementById('openFxRackBtn');
+        const closeFxRackBtn = document.getElementById('closeFxRackBtn');
+
+        const envA = document.getElementById('envA');
+        const envD = document.getElementById('envD');
+        const envS = document.getElementById('envS');
+        const envR = document.getElementById('envR');
+
+        // Populate MIDI Channel Select Options
+        function populateMIDIChannels() {
+            midiChannelSelect.innerHTML = '';
+            const omniOpt = document.createElement('option');
+            omniOpt.value = 'all';
+            omniOpt.text = 'ALL (Omni)';
+            midiChannelSelect.appendChild(omniOpt);
+
+            for (let ch = 1; ch <= 16; ch++) {
+                const opt = document.createElement('option');
+                opt.value = ch;
+                opt.text = `Ch ${ch}`;
+                if (ch === appState.midiChannel) opt.selected = true;
+                midiChannelSelect.appendChild(opt);
+            }
+        }
+
+        // Render 8 Step Grid Cards
+        function buildStepGridUI() {
+            stepGrid.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                const stepCard = document.createElement('div');
+                stepCard.id = `step-card-${i}`;
+                stepCard.className = `panel-box rounded-xl p-2 flex flex-col justify-between gap-1 transition-all relative overflow-hidden`;
+
+                stepCard.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-800/80 pb-1">
+                        <div class="flex items-center gap-1.5">
+                            <div id="step-led-${i}" class="led"></div>
+                            <span class="font-mono font-black text-xs text-slate-200">STEP 0${i + 1}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button id="last-step-btn-${i}" onclick="setLastStep(${i})" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded transition">
+                                END STEP
+                            </button>
+                            <button onclick="triggerVoice(${i})" class="bg-amber-950 hover:bg-amber-800 border border-amber-600 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded transition active:scale-95">
+                                TRIG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5 my-0.5">
+                        <div class="flex flex-col gap-0.5">
+                            <div class="flex justify-between text-[9px] font-mono">
+                                <span class="text-slate-400">START (CC ${i + 1})</span>
+                                <span id="start-val-${i}" class="text-cyan-400 font-bold">0%</span>
+                            </div>
+                            <input type="range" id="start-step-${i}" min="0" max="1" step="0.001" value="${appState.steps[i].start}" class="start-slider" oninput="updateStepParam(${i}, 'start', this.value)">
+                        </div>
+
+                        <div class="flex flex-col gap-0.5">
+                            <div class="flex justify-between text-[9px] font-mono">
+                                <span class="text-slate-400">VOL (CC ${i + 9})</span>
+                                <span id="vol-val-${i}" class="text-emerald-400 font-bold">80%</span>
+                            </div>
+                            <input type="range" id="vol-step-${i}" min="0" max="1.5" step="0.01" value="${appState.steps[i].vol}" class="vol-slider" oninput="updateStepParam(${i}, 'vol', this.value)">
+                        </div>
+
+                        <div class="flex flex-col gap-0.5">
+                            <div class="flex justify-between text-[9px] font-mono">
+                                <span class="text-slate-400">PITCH (CC ${i + 17})</span>
+                                <span id="pitch-val-${i}" class="text-purple-400 font-bold">0st</span>
+                            </div>
+                            <input type="range" id="pitch-step-${i}" min="-12" max="12" step="0.1" value="${appState.steps[i].pitch}" class="pitch-slider" oninput="updateStepParam(${i}, 'pitch', this.value)">
+                        </div>
+                    </div>
+                `;
+                stepGrid.appendChild(stepCard);
+            }
+            updateStepUIDisplays();
+            updateLastStepUI();
+        }
+
+        // Initialize Audio System with iOS WKWebView Sound Card Pipeline
+        async function initializeAudioSystem() {
+            try {
+                if (!audioCtx) {
+                    const latency = latencyModeSelect.value;
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                        latencyHint: latency
+                    });
+                    setupAudioGraph();
+                }
+
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+
+                // Unlock iOS Safari Audio Session output by playing a silent burst
+                const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+                const silentSource = audioCtx.createBufferSource();
+                silentSource.buffer = silentBuffer;
+                silentSource.connect(audioCtx.destination);
+                silentSource.start(0);
+
+                await connectAudioInputStream(appState.selectedAudioInId);
+
+                await enumerateDevices();
+                await setupMIDI();
+
+                initAudioBtn.classList.remove('bg-amber-500', 'hover:bg-amber-400');
+                initAudioBtn.classList.add('bg-emerald-900/60', 'border', 'border-emerald-500/50', 'text-emerald-300');
+                initAudioBtn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> HARDWARE CONNECTED`;
+                lucide.createIcons();
+
+                systemStatusText.innerText = "Audio & MIDI interfaces connected.";
+                startPlayheadAnimation();
+            } catch (err) {
+                console.error("Audio init error:", err);
+                systemStatusText.innerText = "Hardware access warning: " + err.message;
+            }
+        }
+
+        async function connectAudioInputStream(deviceId = '') {
+            if (!audioCtx) return;
+
+            if (activeInputStream) {
+                activeInputStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    sampleRate: 44100,
+                    channelCount: { ideal: 2, min: 1 }
+                }
+            };
+
+            if (deviceId) {
+                constraints.audio.deviceId = { exact: deviceId };
+            }
+
+            try {
+                activeInputStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (e) {
+                // Fallback to basic audio constraint if exact device ID fails inside WebKit wrapper
+                activeInputStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+            }
+
+            rebuildInputRouting();
+        }
+
+        function rebuildInputRouting() {
+            if (!audioCtx || !activeInputStream) return;
+
+            if (currentSourceNode) {
+                try { currentSourceNode.disconnect(); } catch (e) {}
+            }
+
+            currentSourceNode = audioCtx.createMediaStreamSource(activeInputStream);
+            
+            inputGainNode = audioCtx.createGain();
+            inputGainNode.gain.value = appState.inputGain;
+
+            channelSplitter = audioCtx.createChannelSplitter(2);
+            channelMerger = audioCtx.createChannelMerger(2);
+
+            currentSourceNode.connect(inputGainNode);
+            inputGainNode.connect(channelSplitter);
+
+            const channelMode = inputChannelSelect.value;
+            if (channelMode === 'ch1') {
+                channelSplitter.connect(channelMerger, 0, 0);
+                channelSplitter.connect(channelMerger, 0, 1);
+            } else if (channelMode === 'ch2') {
+                channelSplitter.connect(channelMerger, 1, 0);
+                channelSplitter.connect(channelMerger, 1, 1);
+            } else {
+                channelSplitter.connect(channelMerger, 0, 0);
+                channelSplitter.connect(channelMerger, 1, 1);
+            }
+        }
+
+        async function enumerateDevices() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            audioInSelect.innerHTML = '<option value="">Default / External Interface</option>';
+            devices.filter(d => d.kind === 'audioinput').forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `Input Device (${d.deviceId.slice(0, 5)}...)`;
+                if (d.deviceId === appState.selectedAudioInId) opt.selected = true;
+                audioInSelect.appendChild(opt);
+            });
+        }
+
+        // Setup Master FX Graph
+        function setupAudioGraph() {
+            // Filter
+            filterNode = audioCtx.createBiquadFilter();
+            filterWetGain = audioCtx.createGain();
+            filterNode.connect(filterWetGain);
+
+            // Overdrive
+            driveWaveShaper = audioCtx.createWaveShaper();
+            driveToneFilter = audioCtx.createBiquadFilter();
+            driveToneFilter.type = 'lowpass';
+            driveWetGain = audioCtx.createGain();
+            driveWaveShaper.connect(driveToneFilter);
+            driveToneFilter.connect(driveWetGain);
+
+            // Compressor
+            compNode = audioCtx.createDynamicsCompressor();
+            compWetGain = audioCtx.createGain();
+            compNode.connect(compWetGain);
+
+            // Delay
+            delayNode = audioCtx.createDelay();
+            delayFBGain = audioCtx.createGain();
+            delayWetGain = audioCtx.createGain();
+            delayNode.connect(delayFBGain);
+            delayFBGain.connect(delayNode);
+            delayNode.connect(delayWetGain);
+
+            // Reverb
+            reverbConvolver = audioCtx.createConvolver();
+            reverbWetGain = audioCtx.createGain();
+            reverbConvolver.connect(reverbWetGain);
+            generateReverbImpulse();
+
+            // Chorus
+            chorusDelayNode = audioCtx.createDelay();
+            chorusLFONode = audioCtx.createOscillator();
+            chorusLFOGain = audioCtx.createGain();
+            chorusWetGain = audioCtx.createGain();
+            chorusLFONode.connect(chorusLFOGain);
+            chorusLFOGain.connect(chorusDelayNode.delayTime);
+            chorusDelayNode.connect(chorusWetGain);
+            chorusLFONode.start();
+
+            // Connect FX wet paths to master destination
+            filterWetGain.connect(audioCtx.destination);
+            driveWetGain.connect(audioCtx.destination);
+            compWetGain.connect(audioCtx.destination);
+            delayWetGain.connect(audioCtx.destination);
+            reverbWetGain.connect(audioCtx.destination);
+            chorusWetGain.connect(audioCtx.destination);
+
+            updateFXParameters();
+        }
+
+        function generateDistortionCurve(amount) {
+            const k = typeof amount === 'number' ? amount : 5;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            const deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        function generateReverbImpulse() {
+            if (!audioCtx) return;
+            const rate = audioCtx.sampleRate;
+            const length = Math.floor(rate * appState.fx.reverbDecay);
+            const impulse = audioCtx.createBuffer(2, length, rate);
+            for (let i = 0; i < 2; i++) {
+                const channel = impulse.getChannelData(i);
+                for (let j = 0; j < length; j++) {
+                    channel[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / length, 2);
+                }
+            }
+            reverbConvolver.buffer = impulse;
+        }
+
+        function toggleClockSource() {
+            appState.clockSource = appState.clockSource === 'internal' ? 'external' : 'internal';
+            clockSourceBtn.innerText = appState.clockSource.toUpperCase();
+            bpmContainer.style.opacity = appState.clockSource === 'internal' ? '1' : '0.4';
+            syncStatus.innerText = appState.clockSource === 'internal' ? 'CLK: INT' : 'CLK: EXT';
+            if (isPlaying && appState.clockSource === 'external') {
+                clearInterval(internalTimer);
+            } else if (isPlaying && appState.clockSource === 'internal') {
+                startInternalClock();
+            }
+        }
+
+        function toggleVoiceMode() {
+            appState.voiceMode = appState.voiceMode === 'overlap' ? 'cutoff' : 'overlap';
+            voiceModeBtn.innerText = appState.voiceMode === 'overlap' ? 'OVERLAP' : 'CUT OFF';
+            voiceModeBtn.className = appState.voiceMode === 'overlap' ? 
+                'bg-slate-900 border border-slate-700 text-cyan-400 font-mono text-[9px] font-bold py-1 px-2 rounded hover:border-cyan-500 transition' : 
+                'bg-amber-950 border border-amber-600 text-amber-300 font-mono text-[9px] font-bold py-1 px-2 rounded transition';
+        }
+
+        function setFilterMode(mode) {
+            appState.fx.filterMode = mode;
+            ['LP', 'BP', 'HP'].forEach(m => {
+                const btn = document.getElementById(`filterMode${m}`);
+                if (btn) {
+                    const isCurrent = (m === 'LP' && mode === 'lowpass') || (m === 'BP' && mode === 'bandpass') || (m === 'HP' && mode === 'highpass');
+                    btn.className = isCurrent ? "bg-amber-500 text-slate-950 text-[9px] font-mono font-bold px-2 py-0.5 rounded" : "bg-slate-800 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded";
+                }
+            });
+            updateFXParameters();
+        }
+
+        // Trigger Voice Playback with Envelope and Real-Time Playhead
+        function triggerVoice(stepIndex) {
+            if (!audioBuffer || !audioCtx) return;
+
+            if (appState.voiceMode === 'cutoff') {
+                activeVoiceSources.forEach(src => {
+                    try { src.stop(); } catch (e) {}
+                });
+                activeVoiceSources = [];
+                activeVoicePositions = [];
+            }
+
+            const step = appState.steps[stepIndex];
+            const source = audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.playbackRate.value = Math.pow(2, step.pitch / 12);
+
+            const voiceGain = audioCtx.createGain();
+            const startPos = step.start * audioBuffer.duration;
+
+            const now = audioCtx.currentTime;
+            const attack = appState.envA;
+            const decay = appState.envD;
+            const sustain = appState.envS * step.vol;
+            const release = appState.envR;
+
+            voiceGain.gain.setValueAtTime(0, now);
+            voiceGain.gain.linearRampToValueAtTime(step.vol, now + attack);
+            voiceGain.gain.linearRampToValueAtTime(sustain, now + attack + decay);
+            voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + attack + decay + 0.5 + release);
+
+            source.connect(voiceGain);
+            voiceGain.connect(audioCtx.destination);
+            voiceGain.connect(filterNode);
+            voiceGain.connect(driveWaveShaper);
+            voiceGain.connect(compNode);
+            voiceGain.connect(delayNode);
+            voiceGain.connect(reverbConvolver);
+            voiceGain.connect(chorusDelayNode);
+
+            source.start(now, startPos);
+            activeVoiceSources.push(source);
+            activeVoicePositions.push({
+                source: source,
+                startTime: now,
+                startOffset: startPos,
+                playbackRate: source.playbackRate.value
+            });
+
+            flashStepLED(stepIndex);
+        }
+
+        function flashStepLED(index) {
+            for (let i = 0; i < 8; i++) {
+                const led = document.getElementById(`step-led-${i}`);
+                if (led) led.classList.toggle('step-active', i === index);
+            }
+        }
+
+        // Recording Engine with Input Channel Selection (Stereo / Left / Right)
+        async function startRecording() {
+            if (!audioCtx) await initializeAudioSystem();
+
+            try {
+                if (!activeInputStream) await connectAudioInputStream(appState.selectedAudioInId);
+
+                const destNode = audioCtx.createMediaStreamDestination();
+                channelMerger.connect(destNode);
+
+                mediaRecorder = new MediaRecorder(destNode.stream);
+                recordChunks = [];
+
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordChunks, { type: 'audio/webm' });
+                    const arrayBuffer = await blob.arrayBuffer();
+                    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    redrawWaveform();
+                    systemStatusText.innerText = `Buffer recorded successfully (${audioBuffer.duration.toFixed(2)}s).`;
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recordStartTime = performance.now();
+
+                recBtnText.innerText = "STOP REC";
+                recLed.classList.add('recording');
+                
+                recordInterval = setInterval(() => {
+                    const elapsed = (performance.now() - recordStartTime) / 1000;
+                    recordTimer.innerText = `${elapsed.toFixed(1)}s / 15.0s`;
+                    if (elapsed >= 15) stopRecording();
+                }, 100);
+
+            } catch (err) {
+                console.error(err);
+                systemStatusText.innerText = "Record error: " + err.message;
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            clearInterval(recordInterval);
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            recBtnText.innerText = "REC BUFFER";
+            recLed.classList.remove('recording');
+        }
+
+        function toggleRecording() {
+            if (isRecording) stopRecording();
+            else startRecording();
+        }
+
+        // Canvas Waveform & Playhead Renderer
+        function redrawWaveform() {
+            const w = waveformCanvas.width;
+            const h = waveformCanvas.height;
+            canvasCtx.fillStyle = '#07090e';
+            canvasCtx.fillRect(0, 0, w, h);
+
+            if (!audioBuffer) return;
+
+            const data = audioBuffer.getChannelData(0);
+            const step = Math.ceil(data.length / w);
+            const amp = h / 2;
+
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = '#334155';
+            canvasCtx.lineWidth = 1;
+
+            for (let i = 0; i < w; i++) {
+                let min = 1.0, max = -1.0;
+                for (let j = 0; j < step; j++) {
+                    const datum = data[(i * step) + j];
+                    if (datum < min) min = datum;
+                    if (datum > max) max = datum;
+                }
+                canvasCtx.moveTo(i, (1 + min) * amp);
+                canvasCtx.lineTo(i, (1 + max) * amp);
+            }
+            canvasCtx.stroke();
+
+            // Overlay Step Slice Markers
+            for (let i = 0; i < 8; i++) {
+                const sliceX = appState.steps[i].start * w;
+                canvasCtx.strokeStyle = '#06b6d4';
+                canvasCtx.lineWidth = 1.5;
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(sliceX, 0);
+                canvasCtx.lineTo(sliceX, h);
+                canvasCtx.stroke();
+
+                canvasCtx.fillStyle = '#06b6d4';
+                canvasCtx.font = '9px monospace';
+                canvasCtx.fillText(`S0${i + 1}`, sliceX + 2, 10);
+            }
+        }
+
+        function startPlayheadAnimation() {
+            function draw() {
+                if (audioBuffer && audioCtx) {
+                    redrawWaveform();
+                    const w = waveformCanvas.width;
+                    const h = waveformCanvas.height;
+                    const duration = audioBuffer.duration;
+
+                    const now = audioCtx.currentTime;
+                    activeVoicePositions.forEach(vp => {
+                        const elapsed = (now - vp.startTime) * vp.playbackRate;
+                        const currentPos = vp.startOffset + elapsed;
+
+                        if (currentPos <= duration) {
+                            const x = (currentPos / duration) * w;
+                            canvasCtx.strokeStyle = '#f59e0b';
+                            canvasCtx.lineWidth = 2.5;
+                            canvasCtx.beginPath();
+                            canvasCtx.moveTo(x, 0);
+                            canvasCtx.lineTo(x, h);
+                            canvasCtx.stroke();
+                        }
+                    });
+
+                    activeVoicePositions = activeVoicePositions.filter(vp => {
+                        const elapsed = (now - vp.startTime) * vp.playbackRate;
+                        return (vp.startOffset + elapsed) <= duration;
+                    });
+                }
+                animFrameReq = requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // Helper to get target pulse interval for external MIDI 24-PPQN clock
+        function getRequiredClockPulseInterval() {
+            const speed = seqSpeedSelect.value;
+            switch(speed) {
+                case "0.25": return 24;  // 1/4x = Quarter note steps
+                case "0.5":  return 12;  // 1/2x = 8th note steps
+                case "1":    return 6;   // 1x = 16th note steps (default)
+                case "2":    return 3;   // 2x = 32nd note steps
+                case "4":    return 1;   // 4x = 96th note steps
+                case "1/8T": return 8;   // 1/8 Triplets
+                case "1/16T": return 4;  // 1/16 Triplets
+                default: return 6;
+            }
+        }
+
+        // Sequencer Clock Logic
+        function toggleSequencer() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                currentStep = -1;
+                midiClockPulseCount = 0;
+                transportBtn.innerHTML = `<i data-lucide="square" class="w-3.5 h-3.5 fill-current"></i> STOP`;
+                if (appState.clockSource === 'internal') {
+                    startInternalClock();
+                }
+            } else {
+                if (internalTimer) clearInterval(internalTimer);
+                transportBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> PLAY SEQ`;
+                flashStepLED(-1);
+            }
+            lucide.createIcons();
+        }
+
+        function startInternalClock() {
+            if (internalTimer) clearInterval(internalTimer);
+            const speedVal = seqSpeedSelect.value;
+            let mult = 1;
+            if (speedVal === "1/8T") mult = 1.5;
+            else if (speedVal === "1/16T") mult = 3;
+            else mult = parseFloat(speedVal);
+
+            const intervalMs = (60 / appState.bpm / 4 / mult) * 1000;
+            internalTimer = setInterval(advanceSequencerStep, intervalMs);
+        }
+
+        function advanceSequencerStep() {
+            const seqLength = appState.lastStep !== null ? appState.lastStep + 1 : 8;
+            currentStep = (currentStep + 1) % seqLength;
+            triggerVoice(currentStep);
+        }
+
+        function setLastStep(idx) {
+            appState.lastStep = appState.lastStep === idx ? null : idx;
+            updateLastStepUI();
+        }
+
+        function updateLastStepUI() {
+            const activeCount = appState.lastStep !== null ? appState.lastStep + 1 : 8;
+            activeStepsDisplay.innerText = `${activeCount} Step${activeCount > 1 ? 's' : ''}`;
+
+            for (let i = 0; i < 8; i++) {
+                const btn = document.getElementById(`last-step-btn-${i}`);
+                if (!btn) continue;
+                if (appState.lastStep === i) {
+                    btn.className = "bg-amber-950 border border-amber-500 text-amber-300 text-[9px] font-mono px-2 py-0.5 rounded transition font-bold";
+                    btn.innerText = "END STEP ✓";
+                } else {
+                    btn.className = "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 text-[9px] font-mono px-2 py-0.5 rounded transition";
+                    btn.innerText = "END STEP";
+                }
+            }
+        }
+
+        // Web MIDI Parser & Strict Single-Port Listener Attachment
+        async function setupMIDI() {
+            if (!navigator.requestMIDIAccess) return;
+
+            try {
+                midiAccess = await navigator.requestMIDIAccess();
+                midiInSelect.innerHTML = '<option value="">No MIDI Input</option>';
+
+                for (let input of midiAccess.inputs.values()) {
+                    const opt = document.createElement('option');
+                    opt.value = input.id;
+                    opt.text = input.name;
+                    if (input.id === appState.selectedMidiInId) opt.selected = true;
+                    midiInSelect.appendChild(opt);
+                }
+
+                bindSelectedMIDIPort();
+            } catch (err) {
+                console.warn("MIDI setup error:", err);
+            }
+        }
+
+        function bindSelectedMIDIPort() {
+            if (!midiAccess) return;
+
+            // First, clear listener from ALL inputs
+            for (let input of midiAccess.inputs.values()) {
+                input.onmidimessage = null;
+            }
+
+            const targetId = midiInSelect.value;
+            appState.selectedMidiInId = targetId;
+
+            if (targetId) {
+                const selectedPort = midiAccess.inputs.get(targetId);
+                if (selectedPort) {
+                    selectedPort.onmidimessage = handleMIDIMessage;
+                }
+            }
+        }
+
+        function handleMIDIMessage(msg) {
+            const [status, data1, data2] = msg.data;
+
+            // MIDI Clock pulse (0xF8)
+            if (status === 0xF8) {
+                flashMidiLED();
+                if (isPlaying && appState.clockSource === 'external') {
+                    midiClockPulseCount++;
+                    const targetPulses = getRequiredClockPulseInterval();
+                    if (midiClockPulseCount >= targetPulses) {
+                        midiClockPulseCount = 0;
+                        advanceSequencerStep();
+                    }
+                }
+                return;
+            }
+
+            const channel = (status & 0x0F) + 1;
+            const type = status & 0xF0;
+            const targetCh = midiChannelSelect.value;
+            const matchesChannel = targetCh === 'all' || parseInt(targetCh, 10) === channel;
+
+            if (matchesChannel && type === 0xB0) { // Control Change
+                flashMidiLED();
+                const cc = data1;
+                const val = data2 / 127;
+
+                if (cc >= 1 && cc <= 8) updateStepParam(cc - 1, 'start', val);
+                else if (cc >= 9 && cc <= 16) updateStepParam(cc - 9, 'vol', val * 1.5);
+                else if (cc >= 17 && cc <= 24) updateStepParam(cc - 17, 'pitch', (val * 24) - 12);
+            }
+        }
+
+        function flashMidiLED() {
+            midiLed.classList.add('active');
+            setTimeout(() => midiLed.classList.remove('active'), 60);
+        }
+
+        // Parameter Updaters & Save / Load Encoded State
+        function updateStepParam(stepIdx, param, val) {
+            val = parseFloat(val);
+            appState.steps[stepIdx][param] = val;
+
+            if (param === 'start') {
+                const el = document.getElementById(`start-step-${stepIdx}`);
+                if (el) el.value = val;
+                const txt = document.getElementById(`start-val-${stepIdx}`);
+                if (txt) txt.innerText = `${Math.round(val * 100)}%`;
+            } else if (param === 'vol') {
+                const el = document.getElementById(`vol-step-${stepIdx}`);
+                if (el) el.value = val;
+                const txt = document.getElementById(`vol-val-${stepIdx}`);
+                if (txt) txt.innerText = `${Math.round(val * 100)}%`;
+            } else if (param === 'pitch') {
+                const el = document.getElementById(`pitch-step-${stepIdx}`);
+                if (el) el.value = val;
+                const txt = document.getElementById(`pitch-val-${stepIdx}`);
+                if (txt) txt.innerText = `${val > 0 ? '+' : ''}${val.toFixed(1)}st`;
+            }
+        }
+
+        function updateStepUIDisplays() {
+            for (let i = 0; i < 8; i++) {
+                updateStepParam(i, 'start', appState.steps[i].start);
+                updateStepParam(i, 'vol', appState.steps[i].vol);
+                updateStepParam(i, 'pitch', appState.steps[i].pitch);
+            }
+        }
+
+        function updateADSRParameters() {
+            document.getElementById('envAVal').innerText = `${Math.round(appState.envA * 1000)}ms`;
+            document.getElementById('envDVal').innerText = `${Math.round(appState.envD * 1000)}ms`;
+            document.getElementById('envSVal').innerText = `${Math.round(appState.envS * 100)}%`;
+            document.getElementById('envRVal').innerText = `${Math.round(appState.envR * 1000)}ms`;
+        }
+
+        function updateFXParameters() {
+            appState.fx.filterCutoff = parseFloat(document.getElementById('fxFilterCutoff').value);
+            appState.fx.filterReso = parseFloat(document.getElementById('fxFilterReso').value);
+            appState.fx.filterMix = parseFloat(document.getElementById('fxFilterMix').value);
+
+            appState.fx.driveAmount = parseFloat(document.getElementById('fxDriveAmount').value);
+            appState.fx.driveTone = parseFloat(document.getElementById('fxDriveTone').value);
+            appState.fx.driveMix = parseFloat(document.getElementById('fxDriveMix').value);
+
+            appState.fx.compThresh = parseFloat(document.getElementById('fxCompThresh').value);
+            appState.fx.compRatio = parseFloat(document.getElementById('fxCompRatio').value);
+            appState.fx.compMix = parseFloat(document.getElementById('fxCompMix').value);
+
+            appState.fx.delayTime = parseFloat(document.getElementById('fxDelayTime').value);
+            appState.fx.delayFB = parseFloat(document.getElementById('fxDelayFeedback').value);
+            appState.fx.delayMix = parseFloat(document.getElementById('fxDelayMix').value);
+
+            appState.fx.reverbDecay = parseFloat(document.getElementById('fxReverbDecay').value);
+            appState.fx.reverbMix = parseFloat(document.getElementById('fxReverbMix').value);
+
+            appState.fx.chorusRate = parseFloat(document.getElementById('fxChorusRate').value);
+            appState.fx.chorusDepth = parseFloat(document.getElementById('fxChorusDepth').value);
+            appState.fx.chorusMix = parseFloat(document.getElementById('fxChorusMix').value);
+
+            if (filterNode) {
+                filterNode.type = appState.fx.filterMode;
+                filterNode.frequency.value = appState.fx.filterCutoff;
+                filterNode.Q.value = appState.fx.filterReso;
+                filterWetGain.gain.value = appState.fx.filterMix;
+
+                driveWaveShaper.curve = generateDistortionCurve(appState.fx.driveAmount);
+                driveToneFilter.frequency.value = appState.fx.driveTone;
+                driveWetGain.gain.value = appState.fx.driveMix;
+
+                compNode.threshold.value = appState.fx.compThresh;
+                compNode.ratio.value = appState.fx.compRatio;
+                compWetGain.gain.value = appState.fx.compMix;
+
+                delayNode.delayTime.value = appState.fx.delayTime;
+                delayFBGain.gain.value = appState.fx.delayFB;
+                delayWetGain.gain.value = appState.fx.delayMix;
+
+                reverbWetGain.gain.value = appState.fx.reverbMix;
+
+                chorusLFONode.frequency.value = appState.fx.chorusRate;
+                chorusLFOGain.gain.value = appState.fx.chorusDepth;
+                chorusWetGain.gain.value = appState.fx.chorusMix;
+            }
+        }
+
+        function resetToDefaultParameters() {
+            appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+            inputGainSlider.value = appState.inputGain;
+            inputGainVal.innerText = `${appState.inputGain.toFixed(1)}x`;
+            bpmSlider.value = appState.bpm;
+            bpmVal.innerText = appState.bpm;
+            seqSpeedSelect.value = appState.seqSpeed;
+            populateMIDIChannels();
+            updateStepUIDisplays();
+            updateLastStepUI();
+            updateADSRParameters();
+            setFilterMode(appState.fx.filterMode);
+            updateFXParameters();
+            systemStatusText.innerText = "Parameters reset to baseline.";
+        }
+
+        // WAV Encoder
+        function bufferToWavBlob(abuffer) {
+            const numOfChan = abuffer.numberOfChannels;
+            const length = abuffer.length * numOfChan * 2 + 44;
+            const outBuffer = new ArrayBuffer(length);
+            const view = new DataView(outBuffer);
+            const channels = [];
+            let sample = 0, offset = 0, pos = 0;
+
+            function writeString(str) {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+                offset += str.length;
+            }
+
+            function setUint16(data) { view.setUint16(offset, data, true); offset += 2; }
+            function setUint32(data) { view.setUint32(offset, data, true); offset += 4; }
+
+            writeString('RIFF');
+            setUint32(length - 8);
+            writeString('WAVE');
+            writeString('fmt ');
+            setUint32(16);
+            setUint16(1);
+            setUint16(numOfChan);
+            setUint32(abuffer.sampleRate);
+            setUint32(abuffer.sampleRate * 2 * numOfChan);
+            setUint16(numOfChan * 2);
+            setUint16(16);
+            writeString('data');
+            setUint32(length - offset - 4);
+
+            for (let i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
+
+            while (pos < abuffer.length) {
+                for (let i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][pos]));
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                    view.setInt16(offset, sample, true);
+                    offset += 2;
+                }
+                pos++;
+            }
+            return new Blob([outBuffer], { type: "audio/wav" });
+        }
+
+        async function saveFullSessionJSON() {
+            const sessionData = { ...appState, audioBase64: null };
+            if (audioBuffer) {
+                const wavBlob = bufferToWavBlob(audioBuffer);
+                const reader = new FileReader();
+                reader.readAsDataURL(wavBlob);
+                reader.onloadend = () => {
+                    sessionData.audioBase64 = reader.result;
+                    downloadJSON(sessionData);
+                };
+            } else {
+                downloadJSON(sessionData);
+            }
+        }
+
+        function downloadJSON(data) {
+            const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", jsonStr);
+            dlAnchor.setAttribute("download", "sample_dfam_session.json");
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            systemStatusText.innerText = "Session saved.";
+        }
+
+        function loadFullSessionJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const loadedData = JSON.parse(event.target.result);
+                    if (loadedData.audioBase64 && audioCtx) {
+                        const res = await fetch(loadedData.audioBase64);
+                        const arrayBuf = await res.arrayBuffer();
+                        audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+                        redrawWaveform();
+                    }
+                    appState = loadedData;
+                    seqSpeedSelect.value = appState.seqSpeed || "1";
+                    populateMIDIChannels();
+                    updateStepUIDisplays();
+                    updateLastStepUI();
+                    updateADSRParameters();
+                    setFilterMode(appState.fx ? appState.fx.filterMode : 'lowpass');
+                    updateFXParameters();
+                    systemStatusText.innerText = "Full session & audio restored.";
+                } catch (err) {
+                    alert("Invalid JSON Session file.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportWavFile() {
+            if (!audioBuffer) {
+                alert("No audio recorded in buffer to export.");
+                return;
+            }
+            const wavBlob = bufferToWavBlob(audioBuffer);
+            const url = URL.createObjectURL(wavBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sample_dfam_recording.wav';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Event Binding Initialization
+        initAudioBtn.addEventListener('click', initializeAudioSystem);
+        
+        audioInSelect.addEventListener('change', (e) => {
+            appState.selectedAudioInId = e.target.value;
+            connectAudioInputStream(appState.selectedAudioInId);
+        });
+
+        inputGainSlider.addEventListener('input', (e) => {
+            appState.inputGain = parseFloat(e.target.value);
+            inputGainVal.innerText = `${appState.inputGain.toFixed(1)}x`;
+            if (inputGainNode) inputGainNode.gain.value = appState.inputGain;
+        });
+
+        inputChannelSelect.addEventListener('change', (e) => {
+            appState.inputChannel = e.target.value;
+            rebuildInputRouting();
+        });
+
+        midiInSelect.addEventListener('change', bindSelectedMIDIPort);
+
+        midiChannelSelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            appState.midiChannel = val === 'all' ? 'all' : parseInt(val, 10);
+        });
+
+        seqSpeedSelect.addEventListener('change', (e) => {
+            appState.seqSpeed = e.target.value;
+            if (isPlaying && appState.clockSource === 'internal') {
+                startInternalClock();
+            }
+        });
+
+        bpmSlider.addEventListener('input', (e) => {
+            appState.bpm = parseInt(e.target.value, 10);
+            bpmVal.innerText = appState.bpm;
+            if (isPlaying && appState.clockSource === 'internal') startInternalClock();
+        });
+
+        recBtn.addEventListener('click', toggleRecording);
+        resetBtn.addEventListener('click', resetToDefaultParameters);
+        transportBtn.addEventListener('click', toggleSequencer);
+
+        saveSessionBtn.addEventListener('click', saveFullSessionJSON);
+        loadSessionBtn.addEventListener('click', () => sessionFileInput.click());
+        exportWavBtn.addEventListener('click', exportWavFile);
+        sessionFileInput.addEventListener('change', loadFullSessionJSON);
+
+        openFxRackBtn.addEventListener('click', () => fxDrawer.classList.remove('closed'));
+        closeFxRackBtn.addEventListener('click', () => fxDrawer.classList.add('closed'));
+
+        [envA, envD, envS, envR].forEach(elm => {
+            elm.addEventListener('input', () => {
+                appState.envA = parseFloat(envA.value);
+                appState.envD = parseFloat(envD.value);
+                appState.envS = parseFloat(envS.value);
+                appState.envR = parseFloat(envR.value);
+                updateADSRParameters();
+            });
+        });
+
+        [
+            'fxFilterCutoff', 'fxFilterReso', 'fxFilterMix',
+            'fxDriveAmount', 'fxDriveTone', 'fxDriveMix',
+            'fxCompThresh', 'fxCompRatio', 'fxCompMix',
+            'fxDelayTime', 'fxDelayFeedback', 'fxDelayMix',
+            'fxReverbDecay', 'fxReverbMix',
+            'fxChorusRate', 'fxChorusDepth', 'fxChorusMix'
+        ].forEach(id => {
+            const slider = document.getElementById(id);
+            if (slider) slider.addEventListener('input', updateFXParameters);
+        });
+
+        window.onload = () => {
+            populateMIDIChannels();
+            buildStepGridUI();
+            const rect = waveformCanvas.parentElement.getBoundingClientRect();
+            waveformCanvas.width = rect.width;
+            waveformCanvas.height = rect.height;
+            redrawWaveform();
+        };
+
+        window.onresize = () => {
+            if (waveformCanvas && waveformCanvas.parentElement) {
+                const rect = waveformCanvas.parentElement.getBoundingClientRect();
+                waveformCanvas.width = rect.width;
+                waveformCanvas.height = rect.height;
+                redrawWaveform();
+            }
+        };
+    </script>
+</body>
+</html>
